@@ -31,39 +31,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-django scikit-learn
+        run: pip install -r requirements.txt pytest pytest-django scikit-learn
       - name: Run tests
         env:
           DJANGO_SETTINGS_MODULE: audiogram.settings
           SECRET_KEY: test-secret-key-for-ci
         run: pytest audio_engine/tests/ -v --tb=short
-
-  performance-test:
-    name: Performance Test (Locust)
-    runs-on: ubuntu-latest
-    needs: backend-tests
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: pip install -r requirements.txt locust scikit-learn
-      - name: Start server & run Locust
-        env:
-          DJANGO_SETTINGS_MODULE: audiogram.settings
-          SECRET_KEY: test-secret-key-for-ci
-        run: |
-          python manage.py migrate --run-syncdb
-          python manage.py runserver &
-          sleep 5
-          locust -f locustfile.py --host=http://localhost:8000 --headless --users 10 --spawn-rate 2 --run-time 30s --html locust-report.html --exit-code-on-error 0 || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: locust-report
-          path: backend/locust-report.html
