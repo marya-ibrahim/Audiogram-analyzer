@@ -21,3 +21,4 @@ android/
 ios/
 *.apk
 *.ipa
+node_modules/
