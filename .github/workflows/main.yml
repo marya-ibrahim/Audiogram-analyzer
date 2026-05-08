@@ -1,0 +1,39 @@
+name: CI Pipeline — Audiogram Analyzer
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  security-scan:
+    name: GitLeaks Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-tests:
+    name: Unit & Integration Tests (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-django scikit-learn
+      - name: Run tests
+        env:
+          DJANGO_SETTINGS_MODULE: audiogram.settings
+          SECRET_KEY: test-secret-key-for-ci
+        run: pytest audio_engine/tests/ -v --tb=short
