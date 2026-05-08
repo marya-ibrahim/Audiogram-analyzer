@@ -1,0 +1,23 @@
+# ── Node ─────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ── Expo ─────────────────────────────────────────────────────
+.expo/
+dist/
+web-build/
+
+# ── Environment — NEVER commit these ─────────────────────────
+.env.local
+.env.production
+*.env.local
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Build outputs ─────────────────────────────────────────────
+android/
+ios/
+*.apk
+*.ipa
