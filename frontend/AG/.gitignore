@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # ── Node ─────────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
@@ -22,62 +21,3 @@ android/
 ios/
 *.apk
 *.ipa
-node_modules/
-=======
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
-
-# Virtual environments
-venv/
-env/
-.env/
-.venv/
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# Django
-*.log
-db.sqlite3
-media/
-staticfiles/
-
-# Node / React Native
-node_modules/
-.expo/
-dist/
-build/
-*.tsbuildinfo
-
-# Package managers
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Migrations (optional: remove if you want to track them)
-# */migrations/
-
-# Coverage
-.coverage
-htmlcov/
->>>>>>> d28c79a363788ad705f8b8838789faa35e273bae
