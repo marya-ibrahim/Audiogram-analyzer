@@ -10,6 +10,27 @@ const LS_KEY = 'audiogram_tests';
 const getLocal  = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; } };
 const saveLocal = (tests) => { try { localStorage.setItem(LS_KEY, JSON.stringify(tests)); } catch {} };
 
+// One-time cleanup: remove old auto-created bone sessions from cache
+try {
+  const cached = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+  const cleaned = cached.filter(t => {
+    // Keep air sessions always
+    if (t.session_type === 'air') return true;
+    // Keep bone sessions only if there's a matching air session within 24h
+    if (t.session_type === 'bone') {
+      return cached.some(a =>
+        a.session_type === 'air' &&
+        a.ear === t.ear &&
+        Math.abs(new Date(a.date) - new Date(t.date)) < 24 * 60 * 60 * 1000
+      );
+    }
+    return true;
+  });
+  if (cleaned.length !== cached.length) {
+    localStorage.setItem(LS_KEY, JSON.stringify(cleaned));
+  }
+} catch {}
+
 // Convert backend session format to local format
 const sessionToTest = (s) => {
   // Backend returns results as dict {freq: threshold} OR array of objects
@@ -30,6 +51,7 @@ const sessionToTest = (s) => {
     date:          s.created_at || s.date || new Date().toISOString(),
     ear:           s.ear === 'R' ? 'right' : s.ear === 'L' ? 'left' : s.ear,
     session_type:  s.session_type,
+    strategy_type: s.strategy_type || 'traditional',
     results,
     avg_threshold: s.avg_threshold ?? s.classification?.pta ?? 0,
     hearing_level: s.hearing_level ?? s.classification?.classification ?? '',
@@ -46,27 +68,36 @@ export const useTests = () => {
     setLoading(true);
     setError(null);
     try {
-      // Try backend first
+      // Fetch from backend (source of truth)
       const sessions = await TestService.getMyHistory();
       const mapped = sessions.map(sessionToTest);
       setTests(mapped);
-      saveLocal(mapped); // cache locally
+      saveLocal(mapped); // cache locally — this overwrites old bone sessions
     } catch (err) {
-      // Fallback to localStorage
+      // Fallback to localStorage — filter out bone sessions without air pair
       console.warn('[useTests] backend failed, using local:', err.message);
-      setTests(getLocal());
-      setError(null); // don't show error, just use local
+      const local = getLocal();
+      setTests(local);
+      setError(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   const deleteTest = useCallback(async (test) => {
+    // Remove from UI immediately (optimistic update)
+    setTests(prev => prev.filter(t => t.id !== test.id));
     // Remove from local cache
     const updated = getLocal().filter(t => t.id !== test.id);
     saveLocal(updated);
-    setTests(prev => prev.filter(t => t.id !== test.id));
-    // Backend delete not implemented yet — just local removal
+    // Delete from backend if it was synced
+    if (test.from_backend && test.id) {
+      try {
+        await TestService.deleteSession(test.id);
+      } catch (err) {
+        console.warn('[useTests] backend delete failed:', err.message);
+      }
+    }
   }, []);
 
   return { tests, loading, error, refresh: load, deleteTest };

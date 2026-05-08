@@ -10,21 +10,28 @@ import apiClient from './client';
 import Config from '../config';
 import { storage } from '../utils/storage';
 
+// ── Encode credentials to Base64 ─────────────────────────
+const encodeCredentials = (identifier, password) => {
+  const raw = JSON.stringify({ identifier, password });
+  return btoa(unescape(encodeURIComponent(raw)));
+};
+
 const AuthService = {
 
   // ── Register ──────────────────────────────────────────────
   register: async ({ name, identifier, password }) => {
-    const response = await apiClient.post('/users/register/', { name, identifier, password });
+    const encoded = encodeCredentials(identifier, password);
+    const response = await apiClient.post('/users/register/', { name, credentials: encoded });
     return response.data;
   },
 
   // ── Login ─────────────────────────────────────────────────
   login: async ({ identifier, password }) => {
-    const response = await apiClient.post('/auth/login/', { identifier, password });
+    const encoded = encodeCredentials(identifier, password);
+    const response = await apiClient.post('/auth/login/', { credentials: encoded });
     const { access, refresh, user } = response.data;
     await storage.setItem(Config.auth.tokenKey, access);
     await storage.setItem(Config.auth.refreshTokenKey, refresh);
-    // Cache user info
     await storage.setItem('user_info', JSON.stringify(user));
     return user;
   },

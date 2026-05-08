@@ -22,7 +22,7 @@ import { saveTestResult } from '../utils/database';
 
 const { width } = Dimensions.get('window');
 
-// ── Hughson-Westlake Algorithm ────────────────────────────
+// -- Hughson-Westlake Algorithm ────────────────────────────
 // Start: 60 dB
 // Heard  → descend 10 dB, keep going
 // Not heard → ascend 5 dB, give ONE chance:
@@ -31,8 +31,8 @@ const { width } = Dimensions.get('window');
 class HughsonWestlake {
   constructor(startDB = 60) {
     this.currentDB  = startDB;
-    this.lastHeard  = null;   // آخر مستوى سُمع
-    this.ascending  = false;  // هل نحن في مرحلة الصعود (بعد أول ما سمع)
+    this.lastHeard  = null;   // last level heard by the patient
+    this.ascending  = false;  // true once we start ascending after first heard
     this.threshold  = null;
     this.done       = false;
   }
@@ -79,7 +79,7 @@ class HughsonWestlake {
   getDB()        { return this.currentDB; }
 }
 
-// ── Local WAV Generator ───────────────────────────────────
+// -- Local WAV Generator ───────────────────────────────────
 const CAL = { 250:{r:26.5},500:{r:14},1000:{r:7},2000:{r:9},4000:{r:9.5},8000:{r:13} };
 function toAmp(freq, db) {
   const spl = db + (CAL[freq]?.r ?? 0);
@@ -114,7 +114,7 @@ function playWAV(freq, db, dur=1.0, ch='both') {
   });
 }
 
-// ── Constants ─────────────────────────────────────────────
+// -- Constants ─────────────────────────────────────────────
 const AIR_FREQS  = [1000, 2000, 4000, 8000, 500, 250];
 const BONE_FREQS = [1000, 2000, 4000, 500, 250];
 const FREQ_LABELS = {250:'250',500:'500',1000:'1k',2000:'2k',4000:'4k',8000:'8k'};
@@ -125,9 +125,11 @@ export default function TestScreen({ navigation, route }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const { showToast } = useToast();
   const { showModal, hideModal } = useToast();
-  const { t, textStyle } = useLang();
-  const { ear, sessionType = 'air' } = route.params;
+  const { t, textStyle, lang } = useLang();
+  const { ear, sessionType = 'air', algorithm = 'traditional' } = route.params;
   const isBone   = sessionType === 'bone';
+  // Map frontend algorithm name to backend name
+  const backendAlgorithm = algorithm === 'gpc' ? 'gaussian_process' : 'hughson_westlake';
   const earLabel = ear === 'left' ? 'Left Ear' : 'Right Ear';
   const earColor = ear === 'left' ? colors.leftEar : colors.rightEar;
   const color    = isBone ? colors.secondary : earColor;
@@ -136,20 +138,24 @@ export default function TestScreen({ navigation, route }) {
 
   const [freqIdx,     setFreqIdx]     = useState(0);
   const [uiState,     setUiState]     = useState(S.READY);
-  const [currentDB,   setCurrentDB]   = useState(30);
+  const [currentDB,   setCurrentDB]   = useState(60);
   const [thresholds,  setThresholds]  = useState({});
   const [diagnosis,   setDiagnosis]   = useState(null);
   const [boneNeeded,  setBoneNeeded]  = useState(false);
 
-  const hw          = useRef(new HughsonWestlake(30));
+  // Session ref — used by both traditional and GPC
+  const sessionRef = useRef(null);
+  const isGPC = algorithm === 'gpc';
+
+  const hw          = useRef(new HughsonWestlake(60));
   const stateRef    = useRef(S.READY);
 
-  // ── Animations ────────────────────────────────────────────
+  // -- Animations ────────────────────────────────────────────
   const fadeAnim    = useRef(new Animated.Value(0)).current;
   const completeFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: false }).start();
   }, []);
   const idxRef      = useRef(0);
   const threshRef   = useRef({});
@@ -161,7 +167,7 @@ export default function TestScreen({ navigation, route }) {
 
   const setUI = s => { stateRef.current = s; setUiState(s); };
 
-  // ── Pulse ─────────────────────────────────────────────────
+  // -- Pulse ─────────────────────────────────────────────────
   const startPulse = () => {
     loopRef.current = Animated.loop(Animated.sequence([
       Animated.timing(pulseAnim,{toValue:1.3,duration:500,useNativeDriver:true}),
@@ -174,36 +180,93 @@ export default function TestScreen({ navigation, route }) {
     Animated.timing(pulseAnim,{toValue:1.0,duration:200,useNativeDriver:true}).start();
   };
 
-  // ── Play tone ─────────────────────────────────────────────
+  // -- Play tone ─────────────────────────────────────────────
   const playTone = async () => {
     if (stateRef.current === S.PLAYING) return;
     setUI(S.PLAYING);
     startPulse();
-    await playWAV(FREQS[idxRef.current], hw.current.getDB(), 3.0, audioChannel).catch(()=>{});
+    const db = isGPC ? currentDB : hw.current.getDB();
+    await playWAV(FREQS[idxRef.current], db, 3.0, audioChannel).catch(()=>{});
     stopPulse();
     setUI(S.WAITING);
   };
   playRef.current = playTone;
 
-  // ── Init frequency ────────────────────────────────────────
-  const initFreq = (idx) => {
-    hw.current     = new HughsonWestlake(60);
+  // -- Init frequency ────────────────────────────────────────
+  const initFreq = async (idx) => {
     idxRef.current = idx;
     setFreqIdx(idx);
-    setCurrentDB(60);
     setUI(S.READY);
+    hw.current = new HughsonWestlake(60);
+    setCurrentDB(60);
+
+// -- Create backend session on first frequency
+    if (idx === 0 && !sessionRef.current) {
+      try {
+        const session = await TestService.createSession({
+          ear, sessionType, hasHearingLoss: isBone, strategyType: backendAlgorithm,
+        });
+        sessionRef.current = session.id;
+      } catch (e) {
+        console.warn('[TestScreen] Could not create backend session:', e.message);
+      }
+    }
+
     if (idx > 0) setTimeout(() => playRef.current?.(), 700);
   };
   initFreqRef.current = initFreq;
 
   useEffect(() => { initFreqRef.current(0); }, []);
 
-  // ── Handle response ───────────────────────────────────────
+  // -- Handle response ───────────────────────────────────────
   const handleResponse = async (heard) => {
     if (stateRef.current !== S.WAITING) return;
 
+    if (isGPC && sessionRef.current) {
+      // -- GPC mode: backend decides the next dB level ──────     
+       try {
+        const result = await TestService.respond(sessionRef.current, heard);
+        const nextDB = result.current_db ?? currentDB;
+        setCurrentDB(nextDB);
+        hw.current.currentDB = nextDB;
+
+        if (result.is_complete) {
+          const freq      = FREQS[idxRef.current];
+          const threshold = result.threshold;
+          const newT      = { ...threshRef.current, [freq]: threshold };
+          threshRef.current = newT;
+          setThresholds(newT);
+
+          const next = idxRef.current + 1;
+          if (next < FREQS.length) {
+            setTimeout(() => initFreqRef.current(next), 500);
+          } else {
+            setUI(S.SAVING);
+            await finishTest(newT);
+          }
+        } else {
+          setUI(S.READY);
+          setTimeout(() => playRef.current?.(), 700);
+        }
+      } catch (e) {
+        showToast('Backend error, using local fallback', 'warning');
+        _handleLocalHW(heard);
+      }
+    } else {
+      // -- Traditional mode: local H-W + fire-and-forget to backend
+      _handleLocalHW(heard);
+    }
+  };
+
+  const _handleLocalHW = async (heard) => {
     hw.current.record(heard);
-    setCurrentDB(hw.current.getDB());
+    const nextDB = hw.current.getDB();
+    setCurrentDB(nextDB);
+
+    // Send response to backend (fire-and-forget, non-blocking)
+    if (sessionRef.current) {
+      TestService.respond(sessionRef.current, heard).catch(() => {});
+    }
 
     if (hw.current.isComplete()) {
       const freq      = FREQS[idxRef.current];
@@ -225,7 +288,7 @@ export default function TestScreen({ navigation, route }) {
     }
   };
 
-  // ── Finish: save to backend (user account) ───────────────
+  // -- Finish: save to backend (user account) ───────────────
   const finishTest = async (finalThresholds) => {
     const vals = Object.values(finalThresholds);
     const avg  = vals.reduce((a,b)=>a+b,0)/vals.length;
@@ -240,23 +303,38 @@ export default function TestScreen({ navigation, route }) {
     });
     if (!isBone && avg > 25) setBoneNeeded(true);
     setUI(S.DONE);
-    Animated.timing(completeFade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    Animated.timing(completeFade, { toValue: 1, duration: 600, useNativeDriver: false }).start();
 
     // Save to backend (linked to user account)
     try {
-      const session = await TestService.createSession({
-        ear, sessionType, hasHearingLoss: isBone, strategyType: 'traditional',
-      });
-      for (const [freq, threshold] of Object.entries(finalThresholds)) {
-        await TestService.submitThreshold(session.id, parseInt(freq), threshold);
-      }
-      const result = await TestService.classifySession(session.id);
-      setDiagnosis(prev => ({ ...prev, ...result, sessionId: session.id }));
+      let sessionId;
 
-      // Cache in localStorage
+      if (isGPC && sessionRef.current) {
+        // GPC: session already exists in backend from createSession
+        sessionId = sessionRef.current;
+      } else if (sessionRef.current) {
+        // Traditional: session exists; submitThreshold saves final thresholds
+        sessionId = sessionRef.current;
+        for (const [freq, threshold] of Object.entries(finalThresholds)) {
+          await TestService.submitThreshold(sessionId, parseInt(freq), threshold).catch(() => {});
+        }
+      } else {
+        // Fallback: create a new session if none was created earlier
+        const session = await TestService.createSession({
+          ear, sessionType, hasHearingLoss: isBone, strategyType: backendAlgorithm,
+        });
+        sessionId = session.id;
+        for (const [freq, threshold] of Object.entries(finalThresholds)) {
+          await TestService.submitThreshold(sessionId, parseInt(freq), threshold);
+        }
+      }
+
+      const result = await TestService.classifySession(sessionId);
+      setDiagnosis(prev => ({ ...prev, ...result, sessionId }));
+
       const existing = (() => { try { return JSON.parse(localStorage.getItem('audiogram_tests') || '[]'); } catch { return []; } })();
       existing.unshift({
-        id: session.id, date: new Date().toISOString(),
+        id: sessionId, date: new Date().toISOString(),
         ear, session_type: sessionType, results: finalThresholds,
         avg_threshold: result.pta ?? avg, hearing_level: result.classification ?? zone.label,
         from_backend: true,
@@ -277,7 +355,7 @@ export default function TestScreen({ navigation, route }) {
 
   const progress = freqIdx / FREQS.length;
 
-  // ── SAVING ────────────────────────────────────────────────
+  // -- SAVING ────────────────────────────────────────────────
   if (uiState === S.SAVING) {
     return (
       <View style={[styles.container, styles.center, {backgroundColor: colors.bg}]}>
@@ -287,12 +365,13 @@ export default function TestScreen({ navigation, route }) {
     );
   }
 
-  // ── DONE ──────────────────────────────────────────────────
+  // -- DONE ──────────────────────────────────────────────────
   if (uiState === S.DONE) {
     const pta  = diagnosis?.pta ?? 0;
     const zone = getHearingLevel(pta);
     const classAr = diagnosis?.classification_ar ?? zone.label;
     const classEn = diagnosis?.classification ?? zone.label;
+    const displayClass = lang === 'ar' ? classAr : classEn;
 
     return (
       <View style={[styles.container, {backgroundColor: colors.bg}]}>
@@ -309,7 +388,21 @@ export default function TestScreen({ navigation, route }) {
             <View style={[styles.badge, {backgroundColor: color+'20', borderColor: color+'50'}]}>
               <Ionicons name={isBone?'radio-outline':'headset-outline'} size={13} color={color} />
               <Text style={[styles.badgeText, {color}]}>
-                {isBone ? 'Bone Conduction' : 'Air Conduction'} · {earLabel}
+                {isBone ? t.boneTest : t.airTest} · {earLabel}
+              </Text>
+            </View>
+            {/* Algorithm badge */}
+            <View style={[styles.algBadge, {
+              backgroundColor: isGPC ? colors.secondary + '20' : colors.primary + '15',
+              borderColor: isGPC ? colors.secondary + '50' : colors.primary + '30',
+            }]}>
+              <Ionicons
+                name={isGPC ? 'analytics-outline' : 'trending-up-outline'}
+                size={12}
+                color={isGPC ? colors.secondary : colors.primary}
+              />
+              <Text style={[styles.algBadgeText, { color: isGPC ? colors.secondary : colors.primary }]}>
+                {isGPC ? t.gpcLabel : t.hwLabel}
               </Text>
             </View>
           </View>
@@ -317,15 +410,15 @@ export default function TestScreen({ navigation, route }) {
           {/* Diagnosis Card */}
           <View style={[styles.diagCard, {borderColor: zone.color+'40', backgroundColor: colors.bgCard}]}>
             <Text style={[styles.diagLabel, {color: colors.textDim}]}>{t.diagnosis}</Text>
-            <Text style={[styles.diagValue, {color: zone.color}]}>{classAr}</Text>
-            <Text style={[styles.diagValueEn, {color: colors.textMuted}]}>{classEn}</Text>
+            <Text style={[styles.diagValue, {color: zone.color}]}>{displayClass}</Text>
+            {lang === 'ar' && classEn !== classAr && (
+              <Text style={[styles.diagValueEn, {color: colors.textMuted}]}>{classEn}</Text>
+            )}
             <View style={styles.ptaRow}>
-              <Text style={[styles.ptaLabel, {color: colors.textMuted}]}>PTA</Text>
+              <Text style={[styles.ptaLabel, {color: colors.textMuted}]}>{t.pta}</Text>
               <Text style={[styles.ptaValue, {color: zone.color}]}>{pta.toFixed(0)} dB HL</Text>
             </View>
-            <Text style={styles.disclaimer}>
-              ⚠️ هذا تقييم أولي وليس تشخيصاً طبياً
-            </Text>
+            <Text style={[styles.disclaimer, textStyle]}>{t.disclaimer2}</Text>
           </View>
 
           {/* Audiogram Chart */}
@@ -436,9 +529,9 @@ export default function TestScreen({ navigation, route }) {
                 <Text style={styles.boneTitle}>{t.boneRec}</Text>
               </View>
                 <Text style={[styles.boneBody, {color: colors.textMuted}]}>
-                {'نتيجة الفحص الهوائي أظهرت فقدان سمع بمعدل '}
+                {'Air test showed hearing loss of '}
                 <Text style={{color: zone.color, fontWeight:'700'}}>{pta.toFixed(0)} dB HL</Text>
-                {' (' + classAr + ').\n\nيُنصح بإجراء فحص عظمي للتمييز بين أنواع فقدان السمع.'}
+                {' (' + classAr + ').\n\nBone conduction test is recommended to determine the type of hearing loss.'}
               </Text>
               <TouchableOpacity
                 style={styles.boneBtn}
@@ -536,7 +629,7 @@ export default function TestScreen({ navigation, route }) {
     );
   }
 
-  // ── MAIN TEST UI ──────────────────────────────────────────
+  // -- MAIN TEST UI ──────────────────────────────────────────
   return (
     <View style={[styles.container, {backgroundColor: colors.bg}]}>
       <AppNavBar navigation={navigation} title={isBone ? 'Bone Conduction' : 'Air Conduction'} disableBack={true} isTestActive={true} />
@@ -628,7 +721,12 @@ export default function TestScreen({ navigation, route }) {
             <Text style={[styles.responseBtnText,{color:uiState===S.WAITING?colors.danger:colors.textDim}]}>{t.notHeard}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={[styles.algHint, {color: colors.textDim}, textStyle]}>{isBone ? t.boneHint : t.hwHint}</Text>
+        <Text style={[styles.algHint, {color: colors.textDim}, textStyle]}>
+          {isBone
+            ? (isGPC ? t.boneGpcHint : t.boneHint)
+            : (isGPC ? t.gpcHint    : t.hwHint)
+          }
+        </Text>
 
         <TouchableOpacity
           style={[styles.retestCurrentBtn, {borderColor: colors.border}]}
@@ -690,6 +788,8 @@ const styles = StyleSheet.create({
   doneTitle:    { fontSize:32, fontWeight:'800', marginBottom:8 },
   badge:        { flexDirection:'row', alignItems:'center', gap:6, paddingHorizontal:12, paddingVertical:5, borderRadius:RADIUS.full, borderWidth:1 },
   badgeText:    { fontSize:12, fontWeight:'700' },
+  algBadge:     { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:10, paddingVertical:4, borderRadius:RADIUS.full, borderWidth:1, marginTop:6 },
+  algBadgeText: { fontSize:11, fontWeight:'700' },
 
   // Diagnosis card
   diagCard:     { borderRadius:RADIUS.xl, padding:SPACING.lg, borderWidth:1.5, marginBottom:16, alignItems:'center' },

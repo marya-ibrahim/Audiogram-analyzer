@@ -2,7 +2,7 @@
 
 A mobile hearing test app built with **React Native + Expo**, implementing the **Hughson-Westlake ascending method** for threshold determination.
 
-**Prepared by:** Marya Ibrahim (4220203) · Leen Roumani (4210200)
+**Prepared by:** Marya Ibrahim  · Leen Roumani 
 **Supervised by:** Dr. Mouhib Alnoukari · Eng. Anas Abdulaziz
 
 ---

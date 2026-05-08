@@ -27,6 +27,7 @@ export default function AppNavBar({
 
   const handleLogout = () => {
     setShowUserMenu(false);
+    // Block logout during an active test
     if (isTestActive) {
       showToast('Please finish or quit the current test before logging out.', 'warning');
       return;

@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
+  // Delegate all auth logic to useAuth hook and expose via context
   const auth = useAuth();
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
 };

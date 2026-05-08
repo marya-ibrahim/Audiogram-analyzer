@@ -21,6 +21,7 @@ const getInitialTheme = () => {
 export const ThemeProvider = ({ children }) => {
   const [mode, setMode] = useState(getInitialTheme);
 
+  // Persist theme preference to localStorage on change
   useEffect(() => {
     try { localStorage?.setItem(STORAGE_KEY, mode); } catch {}
   }, [mode]);

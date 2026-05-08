@@ -25,7 +25,7 @@ export const useAuth = () => {
             const profile = await AuthService.getMe();
             setUser(profile);
           } catch (err) {
-            // If 401 after refresh attempt failed, still keep user logged in with cache
+            // If refresh failed, fall back to cached user info
             try {
               const cached = localStorage.getItem('user_info');
               if (cached) {

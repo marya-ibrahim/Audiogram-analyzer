@@ -38,9 +38,9 @@ export default function LoginScreen({ navigation }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: ANIM.SLOW, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 9, useNativeDriver: true }),
-      Animated.spring(logoAnim,  { toValue: 1, delay: 100, tension: 40, friction: 7, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: ANIM.SLOW, useNativeDriver: false }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 9, useNativeDriver: false }),
+      Animated.spring(logoAnim,  { toValue: 1, delay: 100, tension: 40, friction: 7, useNativeDriver: false }),
     ]).start();
   }, []);
 

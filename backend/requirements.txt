@@ -5,13 +5,13 @@ djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.3.1
 
 # Database
-psycopg2-binary==2.9.9
+# psycopg2-binary==2.9.10  # للإنتاج مع PostgreSQL
 
 # Audio processing
-numpy==1.26.4
-scipy==1.13.0
+numpy==2.2.5
+scipy==1.15.3
+scikit-learn>=1.4.0
 
 # Utilities
-Pillow==10.3.0
 python-decouple==3.8
 gunicorn==22.0.0

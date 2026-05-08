@@ -75,6 +75,11 @@ const TestService = {
     return response.data;
   },
 
+  // ── Delete a session ──────────────────────────────────────
+  deleteSession: async (sessionId) => {
+    await apiClient.delete(`/audio/sessions/${sessionId}/`);
+  },
+
   // ── Submit final threshold for a frequency ───────────────
   // POST /api/audio/sessions/{id}/threshold/
   submitThreshold: async (sessionId, frequency, thresholdDb) => {

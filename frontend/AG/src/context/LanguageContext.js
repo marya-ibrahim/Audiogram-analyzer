@@ -64,6 +64,11 @@ const T = {
     notHeard:     'Not Heard',
     hwHint:       'Hughson-Westlake ascending method',
     boneHint:     'Bone Conduction · Hughson-Westlake ascending method',
+    gpcHint:      'GPC · Gaussian Process Classification (Adaptive)',
+    boneGpcHint:  'Bone Conduction · GPC Adaptive method',
+    algorithmUsed: 'Algorithm used',
+    hwLabel:      'Hughson-Westlake',
+    gpcLabel:     'GPC Adaptive',
     quitTest:     'Quit Test?',
     quitBody:     'Current results will not be saved.',
     continueBtn:  'Continue',
@@ -165,6 +170,11 @@ const T = {
     notHeard:     'لم أسمع',
     hwHint:       'طريقة هيوسون-ويستليك التصاعدية',
     boneHint:     'فحص عظمي · طريقة هيوسون-ويستليك التصاعدية',
+    gpcHint:      'GPC · تصنيف العملية الغاوسية (تكيفي)',
+    boneGpcHint:  'فحص عظمي · طريقة GPC التكيفية',
+    algorithmUsed: 'الخوارزمية المستخدمة',
+    hwLabel:      'هيوسون-ويستليك',
+    gpcLabel:     'GPC التكيفية',
     quitTest:     'إنهاء الفحص؟',
     quitBody:     'لن يتم حفظ النتائج الحالية.',
     continueBtn:  'متابعة',
@@ -222,6 +232,7 @@ const T = {
 export const LanguageProvider = ({ children }) => {
   const [lang, setLang] = useState(getInitialLang);
 
+  // Toggle between English and Arabic, persist to localStorage
   const toggleLang = () => {
     const next = lang === 'en' ? 'ar' : 'en';
     setLang(next);
