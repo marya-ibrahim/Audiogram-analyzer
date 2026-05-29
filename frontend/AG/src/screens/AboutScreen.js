@@ -21,8 +21,8 @@ export default function AboutScreen({ navigation }) {
   ];
 
   const team = [
-    { name: 'Marya Ibrahim',        id: '4220203', role: 'Developer' },
-    { name: 'Leen Roumani',         id: '4210200', role: 'Developer' },
+    { name: 'Marya Ibrahim',        id: '', role: 'Developer' },
+    { name: 'Leen Roumani',         id: '', role: 'Developer' },
     { name: 'Dr. Mouhib Alnoukari', id: '',        role: 'Supervisor' },
     { name: 'Eng. Anas Abdulaziz',  id: '',        role: 'Supervisor' },
   ];
