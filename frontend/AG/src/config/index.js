@@ -3,6 +3,8 @@
 // Edit this file to change API endpoints, timeouts, feature flags
 // ============================================================
 
+import { Platform } from 'react-native';
+
 export const Config = {
   // ── API ────────────────────────────────────────────────────
   api: {
@@ -10,11 +12,15 @@ export const Config = {
     //   Web browser  → localhost
     //   Android emulator → 10.0.2.2
     //   Physical device  → replace with your machine's local IP (ipconfig)
+    // Priority:
+    //   1) EXPO_PUBLIC_API_URL (set in eas.json for release builds, or in a .env file)
+    //   2) Dev only: web -> localhost, Android emulator -> 10.0.2.2
+    // Release builds MUST use an https:// URL of your deployed backend.
     baseURL: (() => {
-      if (typeof window !== 'undefined' && window.location?.hostname === 'localhost') {
-        return 'http://localhost:8000/api'; // web browser
-      }
-      return 'http://10.0.2.2:8000/api'; // Android emulator
+      const fromEnv = process.env.EXPO_PUBLIC_API_URL;
+      if (fromEnv) return fromEnv.replace(/\/+$/, '');
+      if (Platform.OS === 'web') return 'http://localhost:8000/api';
+      return 'http://10.0.2.2:8000/api'; // Android emulator only
     })(),
 
     // Request timeout (ms)

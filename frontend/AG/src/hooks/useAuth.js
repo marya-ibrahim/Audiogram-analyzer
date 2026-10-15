@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AuthService } from '../api';
 import Config from '../config';
+import { storage } from '../utils/storage';
 
 export const useAuth = () => {
   const [user,      setUser]      = useState(null);
@@ -25,9 +26,9 @@ export const useAuth = () => {
             const profile = await AuthService.getMe();
             setUser(profile);
           } catch (err) {
-            // If 401 after refresh attempt failed, still keep user logged in with cache
+            // If refresh failed, fall back to cached user info
             try {
-              const cached = localStorage.getItem('user_info');
+              const cached = await storage.getItem('user_info');
               if (cached) {
                 setUser(JSON.parse(cached));
               } else {

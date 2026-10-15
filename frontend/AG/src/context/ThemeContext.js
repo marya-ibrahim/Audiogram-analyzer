@@ -6,13 +6,14 @@
 // ============================================================
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { themes } from '../constants/theme';
+import { localStore } from '../utils/localStore';
 
 const ThemeContext = createContext(null);
 const STORAGE_KEY = 'audiogram_theme';
 
 const getInitialTheme = () => {
   try {
-    const saved = localStorage?.getItem(STORAGE_KEY);
+    const saved = localStore.getItem(STORAGE_KEY);
     if (saved === 'light' || saved === 'dark') return saved;
   } catch {}
   return 'dark';
@@ -21,8 +22,9 @@ const getInitialTheme = () => {
 export const ThemeProvider = ({ children }) => {
   const [mode, setMode] = useState(getInitialTheme);
 
+  // Persist theme preference to localStorage on change
   useEffect(() => {
-    try { localStorage?.setItem(STORAGE_KEY, mode); } catch {}
+    try { localStore.setItem(STORAGE_KEY, mode); } catch {}
   }, [mode]);
 
   const isDark = mode === 'dark';

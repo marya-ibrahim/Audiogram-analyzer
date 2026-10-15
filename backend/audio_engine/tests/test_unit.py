@@ -31,7 +31,8 @@ class TestHughsonWestlake:
 
     def test_threshold_after_two_heard(self):
         s = HughsonWestlakeStrategy(start_db=40)
-        responses = [(40, True), (30, False), (35, True), (35, True)]
+        # 2 heard out of 3 presentations at the same level (35 dB)
+        responses = [(40, True), (30, False), (35, True), (35, False), (35, True)]
         threshold = s.is_threshold_reached(responses)
         assert threshold == 35.0
 

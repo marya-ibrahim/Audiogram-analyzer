@@ -1,13 +1,12 @@
 // ============================================================
 // APP NAVBAR — Sticky top navigation bar
 // ============================================================
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthContext';
 import { SPACING, RADIUS } from '../constants/theme';
-import { useToast } from './Toast';
 import { useLang } from '../context/LanguageContext';
 
 export default function AppNavBar({
@@ -19,18 +18,41 @@ export default function AppNavBar({
 }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuthContext();
-  const { showToast } = useToast();
-  const { lang, toggleLang } = useLang();
+  const { lang, toggleLang, t } = useLang();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 90, right: SPACING.lg });
+  const badgeRef = useRef(null);
 
-  const userName = user?.name || null;
+  // The backend sends first_name / last_name / username (there is no "name" field)
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
+  const userName = user ? (fullName || user.name || user.username || null) : null;
+
+  // Phone sign-ups are stored as "<phone>@placeholder.local" — show the phone instead
+  const rawEmail = user?.email || '';
+  const isPlaceholder = rawEmail.endsWith('@placeholder.local');
+  const contactIsPhone = isPlaceholder || (!rawEmail && !!(user?.phone_number || user?.phone));
+  const contactValue = isPlaceholder
+    ? (user?.username || rawEmail.replace('@placeholder.local', ''))
+    : (rawEmail || user?.phone_number || user?.phone || '');
+  const roleLabel = user?.role === 'audiologist' ? t.audiologist : t.patient;
+
+  const openMenu = () => {
+    // Measure the button so the menu opens right under it
+    if (badgeRef.current?.measureInWindow) {
+      badgeRef.current.measureInWindow((x, y, w, h) => {
+        setMenuPos({ top: y + h + 6, right: SPACING.lg });
+        setShowUserMenu(true);
+      });
+    } else {
+      setShowUserMenu(true);
+    }
+  };
 
   const handleLogout = () => {
+    // Block logout during an active test
+    // (the menu already shows why: a lock icon and a hint under "Sign Out")
+    if (isTestActive) return;
     setShowUserMenu(false);
-    if (isTestActive) {
-      showToast('Please finish or quit the current test before logging out.', 'warning');
-      return;
-    }
     logout();
   };
 
@@ -90,7 +112,9 @@ export default function AppNavBar({
 
         {userName && (
           <TouchableOpacity
-            onPress={() => setShowUserMenu(v => !v)}
+            ref={badgeRef}
+            collapsable={false}
+            onPress={() => (showUserMenu ? setShowUserMenu(false) : openMenu())}
             style={[styles.userBadge, { backgroundColor: colors.primaryDim, borderColor: colors.primary + '35' }]}
           >
             <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
@@ -100,41 +124,76 @@ export default function AppNavBar({
         )}
       </View>
 
-      {/* User dropdown */}
-      {showUserMenu && (
-        <View style={[styles.dropdown, { backgroundColor: colors.bgCard, borderColor: colors.border, shadowColor: colors.shadowColor ?? '#000' }]}>
-          {/* User info */}
-          <View style={[styles.dropdownHeader, { borderBottomColor: colors.border }]}>
-            <View style={[styles.avatarCircle, { backgroundColor: colors.primaryDim }]}>
-              <Text style={[styles.avatarLetter, { color: colors.primary }]}>
-                {userName?.charAt(0)?.toUpperCase()}
-              </Text>
-            </View>
-            <View>
-              <Text style={[styles.dropdownName, { color: colors.text }]}>{userName}</Text>
-              <Text style={[styles.dropdownEmail, { color: colors.textMuted }]}>{user?.email || user?.phone || ''}</Text>
-            </View>
-          </View>
-
-          {/* Logout button */}
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={[styles.dropdownItem, { borderTopColor: colors.border }]}
+      {/* User menu — in a Modal so it can be tapped on Android
+          (touches outside a parent view's bounds are ignored there) */}
+      <Modal
+        visible={showUserMenu}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowUserMenu(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setShowUserMenu(false)}>
+          <Pressable
+            onPress={() => {}}
+            style={[styles.dropdown, {
+              top: menuPos.top,
+              right: menuPos.right,
+              backgroundColor: colors.bgCard,
+              borderColor: colors.border,
+              shadowColor: colors.shadowColor ?? '#000',
+            }]}
           >
-            <Ionicons name="log-out-outline" size={16} color={colors.danger} />
-            <Text style={[styles.dropdownItemText, { color: colors.danger }]}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            {/* Name + avatar */}
+            <View style={[styles.dropdownHeader, { borderBottomColor: colors.border }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: colors.primaryDim }]}>
+                <Text style={[styles.avatarLetter, { color: colors.primary }]}>
+                  {userName?.charAt(0)?.toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.dropdownName, { color: colors.text }]} numberOfLines={2}>{userName}</Text>
+                <Text style={[styles.dropdownEmail, { color: colors.textMuted }]}>{t.signedIn}</Text>
+              </View>
+            </View>
 
-      {/* Backdrop to close dropdown */}
-      {showUserMenu && (
-        <TouchableOpacity
-          style={styles.backdrop}
-          onPress={() => setShowUserMenu(false)}
-          activeOpacity={1}
-        />
-      )}
+            {/* Details */}
+            <View style={styles.detailsBox}>
+              {!!contactValue && (
+                <View style={styles.detailRow}>
+                  <Ionicons name={contactIsPhone ? 'call-outline' : 'mail-outline'} size={15} color={colors.textMuted} />
+                  <Text style={[styles.detailText, { color: colors.text }]} numberOfLines={1}>{contactValue}</Text>
+                </View>
+              )}
+              <View style={styles.detailRow}>
+                <Ionicons name="shield-checkmark-outline" size={15} color={colors.textMuted} />
+                <Text style={[styles.detailText, { color: colors.text }]}>{t.accountType}: {roleLabel}</Text>
+              </View>
+            </View>
+
+            {/* Sign out — disabled while a test is running */}
+            <TouchableOpacity
+              onPress={handleLogout}
+              activeOpacity={isTestActive ? 1 : 0.7}
+              style={[styles.dropdownItem, { borderTopColor: colors.border, opacity: isTestActive ? 0.5 : 1 }]}
+            >
+              <Ionicons
+                name={isTestActive ? 'lock-closed-outline' : 'log-out-outline'}
+                size={16}
+                color={isTestActive ? colors.textMuted : colors.danger}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.dropdownItemText, { color: isTestActive ? colors.textMuted : colors.danger }]}>
+                  {t.signOut}
+                </Text>
+                {isTestActive && (
+                  <Text style={[styles.lockedHint, { color: colors.textMuted }]}>{t.logoutBlocked}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -167,18 +226,17 @@ const styles = StyleSheet.create({
   themeBtn:     { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   langBtn:      { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   langText:     { fontSize: 12, fontWeight: '800' },
-  userBadge:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 120 },
+  userBadge:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: RADIUS.full, borderWidth: 1, maxWidth: 140 },
   userName:     { fontSize: 11, fontWeight: '700', flexShrink: 1 },
 
-  // Dropdown
+  // Dropdown (inside Modal)
+  backdrop: { flex: 1 },
   dropdown: {
     position: 'absolute',
-    top: '100%',
-    right: SPACING.lg,
-    minWidth: 220,
+    minWidth: 240,
+    maxWidth: 300,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    zIndex: 200,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -190,8 +248,10 @@ const styles = StyleSheet.create({
   avatarLetter:   { fontSize: 18, fontWeight: '800' },
   dropdownName:   { fontSize: 14, fontWeight: '700' },
   dropdownEmail:  { fontSize: 12, marginTop: 1 },
-  dropdownItem:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
+  detailsBox:     { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  detailRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  detailText:     { fontSize: 13, flexShrink: 1 },
+  dropdownItem:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderTopWidth: 1 },
   dropdownItemText: { fontSize: 14, fontWeight: '600' },
-
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 150 },
+  lockedHint:     { fontSize: 11, marginTop: 2 },
 });

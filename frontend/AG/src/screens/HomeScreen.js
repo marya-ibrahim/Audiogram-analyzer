@@ -23,7 +23,7 @@ const useStaggeredEntrance = (count, delay = 120) => {
   useEffect(() => {
     Animated.parallel(
       anims.map((anim, i) =>
-        Animated.spring(anim, { toValue: 1, delay: i * delay, tension: 50, friction: 7, useNativeDriver: true })
+        Animated.spring(anim, { toValue: 1, delay: i * delay, tension: 50, friction: 7, useNativeDriver: false })
       )
     ).start();
   }, []);
@@ -43,9 +43,9 @@ export default function HomeScreen({ navigation }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: ANIM.SLOW, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 9, useNativeDriver: true }),
-      Animated.spring(logoScale, { toValue: 1, delay: 100, tension: 40, friction: 7, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: ANIM.SLOW, useNativeDriver: false }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 9, useNativeDriver: false }),
+      Animated.spring(logoScale, { toValue: 1, delay: 100, tension: 40, friction: 7, useNativeDriver: false }),
     ]).start();
   }, []);
 

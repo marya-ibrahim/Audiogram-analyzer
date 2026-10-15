@@ -37,20 +37,21 @@ export function ToastProvider({ children }) {
 
   const showToast = useCallback((message, type = 'error', duration = 3500) => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    // Show toast with animation
     setToast({ message, type });
     opacity.setValue(0);
     translateY.setValue(20);
     Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+      Animated.timing(opacity,    { toValue: 1, duration: 250, useNativeDriver: false }),
+      Animated.spring(translateY, { toValue: 0, tension: 80, friction: 10, useNativeDriver: false }),
     ]).start();
     timerRef.current = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => setToast(null));
+      Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: false }).start(() => setToast(null));
     }, duration);
   }, []);
   const hideToast = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setToast(null));
+    Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: false }).start(() => setToast(null));
   }, []);
 
   const showModal = useCallback((content) => setModal(content), []);

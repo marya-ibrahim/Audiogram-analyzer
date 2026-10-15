@@ -31,7 +31,7 @@ export default function HistoryScreen({ navigation, route }) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useFocusEffect(useCallback(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: ANIM.NORMAL, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: ANIM.NORMAL, useNativeDriver: false }).start();
     loadTests();
   }, []));
 
@@ -143,7 +143,7 @@ export default function HistoryScreen({ navigation, route }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      {/* Sticky Navbar — خارج ScrollView */}
+      {/* Sticky Navbar — outside ScrollView */}
       <AppNavBar navigation={navigation} title="My Results" />
       {tests.length > 0 && (
         <TouchableOpacity
@@ -166,6 +166,7 @@ export default function HistoryScreen({ navigation, route }) {
               const earColor  = test.ear === 'left' ? colors.leftEar : colors.rightEar;
               const isBone    = test.session_type === 'bone';
               const typeColor = isBone ? colors.secondary : earColor;
+              const isAdaptive = test.strategy_type === 'gaussian_process';
               const zone      = getHearingLevel(test.avg_threshold);
               const isExpanded = expanded === test.id;
               const boneMatch = findBoneMatch(test);
@@ -197,6 +198,20 @@ export default function HistoryScreen({ navigation, route }) {
                               <Text style={[styles.pairedBadgeText, { color: colors.secondary }]}>+Bone</Text>
                             </View>
                           )}
+                          {/* Algorithm badge */}
+                          <View style={[styles.pairedBadge, {
+                            backgroundColor: isAdaptive ? colors.secondary + '15' : colors.primary + '12',
+                            borderColor: isAdaptive ? colors.secondary + '40' : colors.primary + '25',
+                          }]}>
+                            <Ionicons
+                              name={isAdaptive ? 'analytics-outline' : 'trending-up-outline'}
+                              size={10}
+                              color={isAdaptive ? colors.secondary : colors.primary}
+                            />
+                            <Text style={[styles.pairedBadgeText, { color: isAdaptive ? colors.secondary : colors.primary }]}>
+                              {isAdaptive ? 'GPC' : 'H-W'}
+                            </Text>
+                          </View>
                         </View>
                         <Text style={[styles.dateText, { color: colors.textDim }]}>{formatDate(test.date)}</Text>
                       </View>

@@ -73,6 +73,41 @@ class TestSessionAPIIntegration(TestCase):
         self.assertTrue(result.is_completed)
         self.assertEqual(result.threshold_db, 40)
 
+    def test_submit_threshold_rejects_bad_values(self):
+        session = TestSession.objects.create(patient=self.user, ear='R', session_type='air')
+        r = self.client.post(f'/api/audio/sessions/{session.id}/threshold/',
+                             {'frequency': 1234, 'threshold_db': 40})
+        self.assertEqual(r.status_code, 400)
+        r = self.client.post(f'/api/audio/sessions/{session.id}/threshold/',
+                             {'frequency': 1000, 'threshold_db': 999})
+        self.assertEqual(r.status_code, 400)
+
+    def test_session_completes_when_all_thresholds_saved(self):
+        r = self.client.post('/api/audio/sessions/', {
+            'ear': 'R', 'session_type': 'air',
+            'strategy_type': 'traditional', 'has_hearing_loss': False,
+        })
+        sid = r.data['id']
+        for f in [250, 500, 1000, 2000, 4000, 8000]:
+            resp = self.client.post(f'/api/audio/sessions/{sid}/threshold/',
+                                    {'frequency': f, 'threshold_db': 20})
+            self.assertEqual(resp.status_code, 200)
+        self.assertEqual(TestSession.objects.get(id=sid).status, 'completed')
+        self.assertEqual(self.client.get(f'/api/audio/sessions/{sid}/classify/').status_code, 200)
+
+    def test_cannot_touch_another_users_session(self):
+        other = User.objects.create_user(username='other', password='x12345678')
+        session = TestSession.objects.create(patient=other, ear='R', session_type='air', status='completed')
+        self.assertEqual(self.client.post(f'/api/audio/sessions/{session.id}/threshold/',
+                                          {'frequency': 1000, 'threshold_db': 20}).status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/audio/sessions/{session.id}/').status_code, 404)
+        self.assertEqual(len(self.client.get('/api/audio/my-history/').data), 0)
+
+    def test_delete_own_session(self):
+        session = TestSession.objects.create(patient=self.user, ear='R', session_type='air')
+        self.assertEqual(self.client.delete(f'/api/audio/sessions/{session.id}/').status_code, 204)
+        self.assertFalse(TestSession.objects.filter(id=session.id).exists())
+
     def test_classify_session(self):
         session = TestSession.objects.create(
             patient=self.user, ear='R', session_type='air', status='completed'
