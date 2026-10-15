@@ -14,13 +14,13 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR-BACKEND-DOMAIN/api"
+        "EXPO_PUBLIC_API_URL": "https://audiogram-backend-zu8z.onrender.com/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR-BACKEND-DOMAIN/api"
+        "EXPO_PUBLIC_API_URL": "https://audiogram-backend-zu8z.onrender.com/api"
       },
       "android": {
         "buildType": "apk"
